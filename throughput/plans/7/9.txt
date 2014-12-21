@@ -1,0 +1,67 @@
+BEGIN;
+BEGIN
+EXPLAIN
+select
+	nation,
+	o_year,
+	sum(amount) as sum_profit
+from
+	(
+		select
+			n_name as nation,
+			extract(year from o_orderdate) as o_year,
+			l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
+		from
+			part,
+			supplier,
+			lineitem,
+			partsupp,
+			orders,
+			nation
+		where
+			s_suppkey = l_suppkey
+			and ps_suppkey = l_suppkey
+			and ps_partkey = l_partkey
+			and p_partkey = l_partkey
+			and o_orderkey = l_orderkey
+			and s_nationkey = n_nationkey
+			and p_name like '%dodger%'
+	) as profit
+group by
+	nation,
+	o_year
+order by
+	nation,
+	o_year desc;
+                                                                  QUERY PLAN                                                                   
+-----------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=3964814.18..3964819.18 rows=143 width=46)
+   ->  Sort  (cost=3964814.18..3964814.53 rows=143 width=46)
+         Sort Key: nation.n_name, (date_part('year'::text, (orders.o_orderdate)::timestamp without time zone))
+         ->  Hash Join  (cost=3504824.09..3964809.06 rows=143 width=46)
+               Hash Cond: (supplier.s_nationkey = nation.n_nationkey)
+               ->  Hash Join  (cost=3504822.52..3964804.81 rows=143 width=24)
+                     Hash Cond: (lineitem.l_suppkey = supplier.s_suppkey)
+                     ->  Hash Join  (cost=3500393.52..3960372.97 rows=142 width=28)
+                           Hash Cond: (orders.o_orderkey = lineitem.l_orderkey)
+                           ->  Seq Scan on orders  (cost=0.00..403671.84 rows=15014984 width=8)
+                           ->  Hash  (cost=3500391.75..3500391.75 rows=142 width=28)
+                                 ->  Merge Join  (cost=2830703.97..3500391.75 rows=142 width=28)
+                                       Merge Cond: ((partsupp.ps_partkey = lineitem.l_partkey) AND (partsupp.ps_suppkey = lineitem.l_suppkey))
+                                       ->  Index Scan using pk_partsupp on partsupp  (cost=0.00..603091.29 rows=8000000 width=12)
+                                       ->  Sort  (cost=2830702.45..2839568.00 rows=3546222 width=28)
+                                             Sort Key: part.p_partkey, lineitem.l_suppkey
+                                             ->  Hash Join  (cost=66998.46..2444911.59 rows=3546222 width=28)
+                                                   Hash Cond: (lineitem.l_partkey = part.p_partkey)
+                                                   ->  Seq Scan on lineitem  (cost=0.00..1666934.25 rows=60045925 width=24)
+                                                   ->  Hash  (cost=65522.00..65522.00 rows=118117 width=4)
+                                                         ->  Seq Scan on part  (cost=0.00..65522.00 rows=118117 width=4)
+                                                               Filter: ((p_name)::text ~~ '%dodger%'::text)
+                     ->  Hash  (cost=3179.00..3179.00 rows=100000 width=8)
+                           ->  Seq Scan on supplier  (cost=0.00..3179.00 rows=100000 width=8)
+               ->  Hash  (cost=1.25..1.25 rows=25 width=30)
+                     ->  Seq Scan on nation  (cost=0.00..1.25 rows=25 width=30)
+(26 rows)
+
+COMMIT;
+COMMIT

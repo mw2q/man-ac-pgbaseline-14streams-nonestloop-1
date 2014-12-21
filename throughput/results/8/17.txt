@@ -1,0 +1,52 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	sum(l_extendedprice) / 7.0 as avg_yearly
+from
+	lineitem,
+	part
+where
+	p_partkey = l_partkey
+	and p_brand = 'Brand#42'
+	and p_container = 'WRAP JAR'
+	and l_quantity < (
+		select
+			0.2 * avg(l_quantity)
+		from
+			lineitem
+		where
+			l_partkey = p_partkey
+	);
+                                                                                       QUERY PLAN                                                                                       
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=10359682.05..10359682.06 rows=1 width=4) (actual time=44001.365..44001.366 rows=1 loops=1)
+   Buffers: shared hit=2766520 read=455377 dirtied=60
+   ->  Hash Join  (cost=6589.87..10359632.44 rows=19845 width=4) (actual time=46.190..43993.473 rows=5524 loops=1)
+         Hash Cond: (public.lineitem.l_partkey = part.p_partkey)
+         Join Filter: (public.lineitem.l_quantity < (SubPlan 1))
+         Rows Removed by Join Filter: 55629
+         Buffers: shared hit=2766520 read=455377 dirtied=60
+         ->  Seq Scan on lineitem  (cost=0.00..1670268.19 rows=60166019 width=12) (actual time=0.029..19663.517 rows=60045379 loops=1)
+               Buffers: shared hit=639735 read=428873
+         ->  Hash  (cost=6565.13..6565.13 rows=1979 width=4) (actual time=34.330..34.330 rows=2037 loops=1)
+               Buckets: 1024  Batches: 1  Memory Usage: 72kB
+               Buffers: shared hit=158 read=1846
+               ->  Bitmap Heap Scan on part  (cost=73.02..6565.13 rows=1979 width=4) (actual time=1.366..33.352 rows=2037 loops=1)
+                     Recheck Cond: ((p_container = 'WRAP JAR'::bpchar) AND (p_brand = 'Brand#42'::bpchar))
+                     Buffers: shared hit=158 read=1846
+                     ->  Bitmap Index Scan on part_p_container_p_brand_p_partkey_idx  (cost=0.00..72.53 rows=1979 width=0) (actual time=1.028..1.028 rows=2037 loops=1)
+                           Index Cond: ((p_container = 'WRAP JAR'::bpchar) AND (p_brand = 'Brand#42'::bpchar))
+                           Buffers: shared hit=2 read=15
+         SubPlan 1
+           ->  Aggregate  (cost=140.77..140.78 rows=1 width=4) (actual time=0.148..0.148 rows=1 loops=61153)
+                 Buffers: shared hit=2126624 read=24658 dirtied=60
+                 ->  Index Only Scan using lineitem_l_partkey_l_quantity_l_shipmode_idx on lineitem  (cost=0.00..140.69 rows=31 width=4) (actual time=0.025..0.137 rows=31 loops=61153)
+                       Index Cond: (l_partkey = part.p_partkey)
+                       Heap Fetches: 1897867
+                       Buffers: shared hit=2126624 read=24658 dirtied=60
+ Total runtime: 44001.691 ms
+(26 rows)
+
+COMMIT;
+COMMIT

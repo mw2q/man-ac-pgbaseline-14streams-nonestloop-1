@@ -1,0 +1,88 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	ps_partkey,
+	sum(ps_supplycost * ps_availqty) as value
+from
+	partsupp,
+	supplier,
+	nation
+where
+	ps_suppkey = s_suppkey
+	and s_nationkey = n_nationkey
+	and n_name = 'ALGERIA'
+group by
+	ps_partkey having
+		sum(ps_supplycost * ps_availqty) > (
+			select
+				sum(ps_supplycost * ps_availqty) * 0.0000100000
+			from
+				partsupp,
+				supplier,
+				nation
+			where
+				ps_suppkey = s_suppkey
+				and s_nationkey = n_nationkey
+				and n_name = 'ALGERIA'
+		)
+order by
+	value desc;
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=676867.00..677667.00 rows=320000 width=12) (actual time=10288.045..10289.326 rows=10130 loops=1)
+   Sort Key: (sum((public.partsupp.ps_supplycost * (public.partsupp.ps_availqty)::double precision)))
+   Sort Method: quicksort  Memory: 859kB
+   Buffers: shared hit=179495 read=166784
+   InitPlan 1 (returns $0)
+     ->  Aggregate  (cost=320203.33..320203.34 rows=1 width=8) (actual time=5194.007..5194.007 rows=1 loops=1)
+           Buffers: shared hit=70868 read=102270
+           ->  Hash Join  (cost=3645.32..317803.33 rows=320000 width=8) (actual time=39.846..5103.459 rows=314720 loops=1)
+                 Hash Cond: (public.partsupp.ps_suppkey = public.supplier.s_suppkey)
+                 Buffers: shared hit=70868 read=102270
+                 ->  Seq Scan on partsupp  (cost=0.00..250958.00 rows=8000000 width=12) (actual time=0.014..3054.981 rows=8000000 loops=1)
+                       Buffers: shared hit=68688 read=102270
+                 ->  Hash  (cost=3595.32..3595.32 rows=4000 width=4) (actual time=39.748..39.748 rows=3934 loops=1)
+                       Buckets: 1024  Batches: 1  Memory Usage: 139kB
+                       Buffers: shared hit=2180
+                       ->  Hash Join  (cost=1.32..3595.32 rows=4000 width=4) (actual time=0.047..38.633 rows=3934 loops=1)
+                             Hash Cond: (public.supplier.s_nationkey = public.nation.n_nationkey)
+                             Buffers: shared hit=2180
+                             ->  Seq Scan on supplier  (cost=0.00..3179.00 rows=100000 width=8) (actual time=0.005..22.344 rows=100000 loops=1)
+                                   Buffers: shared hit=2179
+                             ->  Hash  (cost=1.31..1.31 rows=1 width=4) (actual time=0.018..0.018 rows=1 loops=1)
+                                   Buckets: 1024  Batches: 1  Memory Usage: 1kB
+                                   Buffers: shared hit=1
+                                   ->  Seq Scan on nation  (cost=0.00..1.31 rows=1 width=4) (actual time=0.011..0.015 rows=1 loops=1)
+                                         Filter: (n_name = 'ALGERIA'::bpchar)
+                                         Rows Removed by Filter: 24
+                                         Buffers: shared hit=1
+   ->  HashAggregate  (cost=323403.33..327403.33 rows=320000 width=12) (actual time=10123.261..10281.783 rows=10130 loops=1)
+         Filter: (sum((public.partsupp.ps_supplycost * (public.partsupp.ps_availqty)::double precision)) > $0)
+         Rows Removed by Filter: 286590
+         Buffers: shared hit=179492 read=166784
+         ->  Hash Join  (cost=3645.32..317803.33 rows=320000 width=12) (actual time=55.038..4618.013 rows=314720 loops=1)
+               Hash Cond: (public.partsupp.ps_suppkey = public.supplier.s_suppkey)
+               Buffers: shared hit=108624 read=64514
+               ->  Seq Scan on partsupp  (cost=0.00..250958.00 rows=8000000 width=16) (actual time=0.037..2626.132 rows=8000000 loops=1)
+                     Buffers: shared hit=106444 read=64514
+               ->  Hash  (cost=3595.32..3595.32 rows=4000 width=4) (actual time=54.934..54.934 rows=3934 loops=1)
+                     Buckets: 1024  Batches: 1  Memory Usage: 139kB
+                     Buffers: shared hit=2180
+                     ->  Hash Join  (cost=1.32..3595.32 rows=4000 width=4) (actual time=0.078..53.430 rows=3934 loops=1)
+                           Hash Cond: (public.supplier.s_nationkey = public.nation.n_nationkey)
+                           Buffers: shared hit=2180
+                           ->  Seq Scan on supplier  (cost=0.00..3179.00 rows=100000 width=8) (actual time=0.017..35.790 rows=100000 loops=1)
+                                 Buffers: shared hit=2179
+                           ->  Hash  (cost=1.31..1.31 rows=1 width=4) (actual time=0.028..0.028 rows=1 loops=1)
+                                 Buckets: 1024  Batches: 1  Memory Usage: 1kB
+                                 Buffers: shared hit=1
+                                 ->  Seq Scan on nation  (cost=0.00..1.31 rows=1 width=4) (actual time=0.018..0.024 rows=1 loops=1)
+                                       Filter: (n_name = 'ALGERIA'::bpchar)
+                                       Rows Removed by Filter: 24
+                                       Buffers: shared hit=1
+ Total runtime: 10301.953 ms
+(52 rows)
+
+COMMIT;
+COMMIT

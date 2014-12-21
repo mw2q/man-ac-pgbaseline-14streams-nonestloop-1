@@ -1,0 +1,75 @@
+BEGIN;
+BEGIN
+create or replace view revenue9 (supplier_no, total_revenue) as
+	select
+		l_suppkey,
+		sum(l_extendedprice * (1 - l_discount))
+	from
+		lineitem
+	where
+		l_shipdate >= '1996-12-01'
+		and l_shipdate < date'1996-12-01' + interval '90 days'
+	group by
+		l_suppkey;
+CREATE VIEW
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	s_suppkey,
+	s_name,
+	s_address,
+	s_phone,
+	total_revenue
+from
+	supplier,
+	revenue9
+where
+	s_suppkey = supplier_no
+	and total_revenue = (
+		select
+			max(total_revenue)
+		from
+			revenue9
+	)
+order by
+	s_suppkey;
+                                                                                       QUERY PLAN                                                                                        
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Merge Join  (cost=2389483.12..2394580.57 rows=3732 width=79) (actual time=16329.492..16329.497 rows=1 loops=1)
+   Merge Cond: (supplier.s_suppkey = revenue9.supplier_no)
+   Buffers: shared hit=1205983 read=130184
+   InitPlan 1 (returns $0)
+     ->  Aggregate  (cost=1186111.04..1186111.05 rows=1 width=8) (actual time=7319.114..7319.114 rows=1 loops=1)
+           Buffers: shared hit=599347 read=68584
+           ->  HashAggregate  (cost=1186027.07..1186064.39 rows=3732 width=12) (actual time=7234.902..7308.083 rows=100000 loops=1)
+                 Buffers: shared hit=599347 read=68584
+                 ->  Bitmap Heap Scan on lineitem  (cost=47846.32..1163307.57 rows=2271950 width=12) (actual time=1613.278..4976.508 rows=2244221 loops=1)
+                       Recheck Cond: ((l_shipdate >= '1996-12-01'::date) AND (l_shipdate < '1997-03-01 00:00:00'::timestamp without time zone))
+                       Buffers: shared hit=599347 read=68584
+                       ->  Bitmap Index Scan on lineitem_l_shipdate_l_suppkey__idx  (cost=0.00..47278.33 rows=2271950 width=0) (actual time=1218.302..1218.302 rows=2277671 loops=1)
+                             Index Cond: ((l_shipdate >= '1996-12-01'::date) AND (l_shipdate < '1997-03-01 00:00:00'::timestamp without time zone))
+                             Buffers: shared read=6136
+   ->  Index Scan using pk_supplier on supplier  (cost=0.00..4791.46 rows=100000 width=71) (actual time=0.111..4.863 rows=10906 loops=1)
+         Buffers: shared hit=272 read=32
+   ->  Sort  (cost=1203372.08..1203381.41 rows=3732 width=12) (actual time=16323.454..16323.456 rows=1 loops=1)
+         Sort Key: revenue9.supplier_no
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=1205711 read=130152
+         ->  Subquery Scan on revenue9  (cost=1203066.69..1203150.66 rows=3732 width=12) (actual time=16286.387..16323.421 rows=1 loops=1)
+               Buffers: shared hit=1205711 read=130152
+               ->  HashAggregate  (cost=1203066.69..1203113.34 rows=3732 width=12) (actual time=16286.385..16323.417 rows=1 loops=1)
+                     Filter: (sum((public.lineitem.l_extendedprice * (1::double precision - public.lineitem.l_discount))) = $0)
+                     Rows Removed by Filter: 99999
+                     Buffers: shared hit=1205711 read=130152
+                     ->  Bitmap Heap Scan on lineitem  (cost=47846.32..1163307.57 rows=2271950 width=12) (actual time=1543.495..6266.069 rows=2244221 loops=1)
+                           Recheck Cond: ((l_shipdate >= '1996-12-01'::date) AND (l_shipdate < '1997-03-01 00:00:00'::timestamp without time zone))
+                           Buffers: shared hit=606364 read=61568
+                           ->  Bitmap Index Scan on lineitem_l_shipdate_l_suppkey__idx  (cost=0.00..47278.33 rows=2271950 width=0) (actual time=1127.788..1127.788 rows=2277671 loops=1)
+                                 Index Cond: ((l_shipdate >= '1996-12-01'::date) AND (l_shipdate < '1997-03-01 00:00:00'::timestamp without time zone))
+                                 Buffers: shared read=6137
+ Total runtime: 16341.129 ms
+(33 rows)
+
+drop view revenue9;
+DROP VIEW
+COMMIT;
+COMMIT

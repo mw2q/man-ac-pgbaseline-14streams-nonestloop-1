@@ -1,0 +1,52 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	sum(l_extendedprice) / 7.0 as avg_yearly
+from
+	lineitem,
+	part
+where
+	p_partkey = l_partkey
+	and p_brand = 'Brand#41'
+	and p_container = 'LG CASE'
+	and l_quantity < (
+		select
+			0.2 * avg(l_quantity)
+		from
+			lineitem
+		where
+			l_partkey = p_partkey
+	);
+                                                                                       QUERY PLAN                                                                                       
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=10389410.84..10389410.85 rows=1 width=4) (actual time=44853.034..44853.035 rows=1 loops=1)
+   Buffers: shared hit=2692328 read=464350 dirtied=60 written=5
+   ->  Hash Join  (cost=6611.25..10389361.05 rows=19915 width=4) (actual time=49.336..44844.051 rows=5268 loops=1)
+         Hash Cond: (public.lineitem.l_partkey = part.p_partkey)
+         Join Filter: (public.lineitem.l_quantity < (SubPlan 1))
+         Rows Removed by Join Filter: 53697
+         Buffers: shared hit=2692328 read=464350 dirtied=60 written=5
+         ->  Seq Scan on lineitem  (cost=0.00..1670268.19 rows=60166019 width=12) (actual time=0.021..20005.929 rows=59985653 loops=1)
+               Buffers: shared hit=632472 read=436136 written=1
+         ->  Hash  (cost=6586.43..6586.43 rows=1986 width=4) (actual time=39.235..39.235 rows=1958 loops=1)
+               Buckets: 1024  Batches: 1  Memory Usage: 69kB
+               Buffers: shared hit=247 read=1682
+               ->  Bitmap Heap Scan on part  (cost=73.09..6586.43 rows=1986 width=4) (actual time=1.378..38.186 rows=1958 loops=1)
+                     Recheck Cond: ((p_container = 'LG CASE'::bpchar) AND (p_brand = 'Brand#41'::bpchar))
+                     Buffers: shared hit=247 read=1682
+                     ->  Bitmap Index Scan on part_p_container_p_brand_p_partkey_idx  (cost=0.00..72.60 rows=1986 width=0) (actual time=1.034..1.034 rows=1958 loops=1)
+                           Index Cond: ((p_container = 'LG CASE'::bpchar) AND (p_brand = 'Brand#41'::bpchar))
+                           Buffers: shared hit=2 read=13
+         SubPlan 1
+           ->  Aggregate  (cost=140.77..140.78 rows=1 width=4) (actual time=0.158..0.158 rows=1 loops=58965)
+                 Buffers: shared hit=2059606 read=26532 dirtied=60 written=4
+                 ->  Index Only Scan using lineitem_l_partkey_l_quantity_l_shipmode_idx on lineitem  (cost=0.00..140.69 rows=31 width=4) (actual time=0.026..0.147 rows=31 loops=58965)
+                       Index Cond: (l_partkey = part.p_partkey)
+                       Heap Fetches: 1840822
+                       Buffers: shared hit=2059606 read=26532 dirtied=60 written=4
+ Total runtime: 44853.325 ms
+(26 rows)
+
+COMMIT;
+COMMIT

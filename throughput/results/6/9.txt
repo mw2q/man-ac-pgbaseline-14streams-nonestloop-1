@@ -1,0 +1,93 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	nation,
+	o_year,
+	sum(amount) as sum_profit
+from
+	(
+		select
+			n_name as nation,
+			extract(year from o_orderdate) as o_year,
+			l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
+		from
+			part,
+			supplier,
+			lineitem,
+			partsupp,
+			orders,
+			nation
+		where
+			s_suppkey = l_suppkey
+			and ps_suppkey = l_suppkey
+			and ps_partkey = l_partkey
+			and p_partkey = l_partkey
+			and o_orderkey = l_orderkey
+			and s_nationkey = n_nationkey
+			and p_name like '%gainsboro%'
+	) as profit
+group by
+	nation,
+	o_year
+order by
+	nation,
+	o_year desc;
+                                                                                     QUERY PLAN                                                                                      
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=3945638.38..3945643.04 rows=133 width=46) (actual time=6993492.004..6996863.927 rows=175 loops=1)
+   Buffers: shared hit=1378602 read=423596 dirtied=127 written=395
+   ->  Sort  (cost=3945638.38..3945638.72 rows=133 width=46) (actual time=6993480.036..6994520.248 rows=3245456 loops=1)
+         Sort Key: nation.n_name, (date_part('year'::text, (orders.o_orderdate)::timestamp without time zone))
+         Sort Method: quicksort  Memory: 554697kB
+         Buffers: shared hit=1378602 read=423596 dirtied=127 written=395
+         ->  Hash Join  (cost=3483813.06..3945633.69 rows=133 width=46) (actual time=113283.493..6973293.697 rows=3245456 loops=1)
+               Hash Cond: (supplier.s_nationkey = nation.n_nationkey)
+               Buffers: shared hit=1378594 read=423596 dirtied=127 written=395
+               ->  Hash Join  (cost=3483811.49..3945629.63 rows=133 width=24) (actual time=113283.384..6968699.175 rows=3245456 loops=1)
+                     Hash Cond: (lineitem.l_suppkey = supplier.s_suppkey)
+                     Buffers: shared hit=1378590 read=423596 dirtied=127 written=395
+                     ->  Hash Join  (cost=3479382.49..3941197.97 rows=133 width=28) (actual time=113221.230..6961671.541 rows=3245456 loops=1)
+                           Hash Cond: (orders.o_orderkey = lineitem.l_orderkey)
+                           Buffers: shared hit=1376411 read=423596 dirtied=127 written=395
+                           ->  Seq Scan on orders  (cost=0.00..405283.20 rows=15074920 width=8) (actual time=0.010..18861.226 rows=15015000 loops=1)
+                                 Buffers: shared hit=144442 read=110092 dirtied=127 written=376
+                           ->  Hash  (cost=3479380.83..3479380.83 rows=133 width=28) (actual time=113218.532..113218.532 rows=3245456 loops=1)
+                                 Buckets: 1024  Batches: 1  Memory Usage: 190164kB
+                                 Buffers: shared hit=1231969 read=313504 written=19
+                                 ->  Merge Join  (cost=2811397.16..3479380.83 rows=133 width=28) (actual time=100505.571..111291.121 rows=3245456 loops=1)
+                                       Merge Cond: ((partsupp.ps_partkey = lineitem.l_partkey) AND (partsupp.ps_suppkey = lineitem.l_suppkey))
+                                       Buffers: shared hit=1231969 read=313504 written=19
+                                       ->  Index Scan using pk_partsupp on partsupp  (cost=0.00..603091.29 rows=8000000 width=12) (actual time=0.029..5856.934 rows=7999949 loops=1)
+                                             Buffers: shared hit=244213 read=189995
+                                       ->  Sort  (cost=2811395.63..2819693.18 rows=3319019 width=28) (actual time=100505.428..101975.011 rows=3245456 loops=1)
+                                             Sort Key: part.p_partkey, lineitem.l_suppkey
+                                             Sort Method: quicksort  Memory: 351856kB
+                                             Buffers: shared hit=987756 read=123509 written=19
+                                             ->  Hash Join  (cost=66898.36..2451907.28 rows=3319019 width=28) (actual time=1881.897..97363.050 rows=3245456 loops=1)
+                                                   Hash Cond: (lineitem.l_partkey = part.p_partkey)
+                                                   Buffers: shared hit=987753 read=123509 written=19
+                                                   ->  Seq Scan on lineitem  (cost=0.00..1673600.58 rows=60286058 width=24) (actual time=0.022..20278.325 rows=60046221 loops=1)
+                                                         Buffers: shared hit=986783 read=83957 written=10
+                                                   ->  Hash  (cost=65522.00..65522.00 rows=110109 width=4) (actual time=1881.594..1881.594 rows=108037 loops=1)
+                                                         Buckets: 16384  Batches: 1  Memory Usage: 3799kB
+                                                         Buffers: shared hit=970 read=39552 written=9
+                                                         ->  Seq Scan on part  (cost=0.00..65522.00 rows=110109 width=4) (actual time=0.022..1803.999 rows=108037 loops=1)
+                                                               Filter: ((p_name)::text ~~ '%gainsboro%'::text)
+                                                               Rows Removed by Filter: 1891963
+                                                               Buffers: shared hit=970 read=39552 written=9
+                     ->  Hash  (cost=3179.00..3179.00 rows=100000 width=8) (actual time=62.044..62.044 rows=100000 loops=1)
+                           Buckets: 16384  Batches: 1  Memory Usage: 3907kB
+                           Buffers: shared hit=2179
+                           ->  Seq Scan on supplier  (cost=0.00..3179.00 rows=100000 width=8) (actual time=0.010..37.222 rows=100000 loops=1)
+                                 Buffers: shared hit=2179
+               ->  Hash  (cost=1.25..1.25 rows=25 width=30) (actual time=0.019..0.019 rows=25 loops=1)
+                     Buckets: 1024  Batches: 1  Memory Usage: 2kB
+                     Buffers: shared hit=1
+                     ->  Seq Scan on nation  (cost=0.00..1.25 rows=25 width=30) (actual time=0.004..0.008 rows=25 loops=1)
+                           Buffers: shared hit=1
+ Total runtime: 6996929.641 ms
+(52 rows)
+
+COMMIT;
+COMMIT
